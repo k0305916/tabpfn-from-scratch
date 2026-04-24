@@ -80,8 +80,9 @@ class Trainer:
         # 前向传播
         logits = self.model(X, y, single_eval_pos=n_support)  # (batch, num_classes)
 
-        # 计算 loss（只在 query 位置）
-        loss = self.criterion(logits, y_query.to(self.device).long())
+        # 计算 loss：取第一个 query 样本的标签（简化处理）
+        y_query_single = y_query[:, 0].to(self.device).long()  # (batch,)
+        loss = self.criterion(logits, y_query_single)
 
         # 反向传播
         self.optimizer.zero_grad()
@@ -165,7 +166,8 @@ class Trainer:
                 y = y.to(self.device)
 
                 logits = self.model(X, y, single_eval_pos=n_support)
-                loss = self.criterion(logits, y_query.to(self.device).long())
+                y_query_single = y_query[:, 0].to(self.device).long()
+                loss = self.criterion(logits, y_query_single)
 
                 total_loss += loss.item()
                 num_batches += 1
