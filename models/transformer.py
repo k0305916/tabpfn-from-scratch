@@ -218,13 +218,14 @@ class PerFeatureTransformer(nn.Module):
 
         d_ff = emsize * nhid_factor
 
-        # 编码器
+        # 编码器：输入是 1 维原始特征
         self.x_encoder = FeatureEncoder(emsize, bias=True)
+        # y 编码：y 值 + nan indicator = 2 维
         self.y_encoder = TargetEncoder(emsize, bias=True)
 
-        # 特征位置编码
+        # 特征位置编码（用实际 num_features+1 是因为拼接后有 y token）
         if feature_positional_embedding == 'subspace':
-            self.feature_pos_emb = FeaturePositionalEmbedding(num_features, emsize)
+            self.feature_pos_emb = FeaturePositionalEmbedding(num_features + 1, emsize)
         else:
             self.feature_pos_emb = None
 
@@ -292,15 +293,11 @@ class PerFeatureTransformer(nn.Module):
 
         # ===== 6. 取测试位置（single_eval_pos）的输出 =====
         # state: (batch, items, features+1, d_model)
-        # 取最后一个位置的特征 token（不是 y token）
-        # y token 在 features 维度最后一个位置
-        eval_output = state[:, single_eval_pos, :-1, :]  # (batch, features, d_model)
-
-        # 汇总所有特征（平均池化）
-        pooled = eval_output.mean(dim=1)  # (batch, d_model)
+        # 取 single_eval_pos 位置的 y token 输出用于分类
+        eval_output = state[:, single_eval_pos, -1, :]  # (batch, d_model)
 
         # ===== 7. 分类 =====
-        logits = self.classifier(pooled)  # (batch, num_classes)
+        logits = self.classifier(eval_output)  # (batch, num_classes)
         return logits
 
     def get_num_params(self):
