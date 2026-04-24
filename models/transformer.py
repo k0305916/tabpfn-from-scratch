@@ -223,9 +223,9 @@ class PerFeatureTransformer(nn.Module):
         # y 编码：y 值 + nan indicator = 2 维
         self.y_encoder = TargetEncoder(emsize, bias=True)
 
-        # 特征位置编码（用实际 num_features+1 是因为拼接后有 y token）
+        # 特征位置编码
         if feature_positional_embedding == 'subspace':
-            self.feature_pos_emb = FeaturePositionalEmbedding(num_features + 1, emsize)
+            self.feature_pos_emb = FeaturePositionalEmbedding(num_features, emsize)
         else:
             self.feature_pos_emb = None
 
