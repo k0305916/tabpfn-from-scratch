@@ -116,6 +116,7 @@ class Trainer:
         num_epochs=50,
         eval_every=5,
         eval_dataloader=None,
+        resume_from=None,
     ):
         """完整训练流程
 
@@ -124,24 +125,46 @@ class Trainer:
             num_epochs: 训练轮数
             eval_every: 每隔几个 epoch 评估一次
             eval_dataloader: 评估数据加载器
+            resume_from: 从 checkpoint 恢复训练的路径，格式 "checkpoint.pt,epoch"
         """
+        start_epoch = 0
         best_loss = float('inf')
 
-        for epoch in range(num_epochs):
+        # 恢复检查点
+        if resume_from is not None:
+            if ',' in resume_from:
+                checkpoint_path, epoch_str = resume_from.rsplit(',', 1)
+                start_epoch = int(epoch_str)
+                _, saved_best_loss = self.load_checkpoint(checkpoint_path)
+                print(f"Resumed from epoch {start_epoch}, checkpoint loaded")
+            else:
+                checkpoint_path = resume_from
+                saved_epoch, saved_best_loss = self.load_checkpoint(checkpoint_path)
+                if saved_epoch is not None:
+                    start_epoch = saved_epoch
+                if saved_best_loss is not None:
+                    best_loss = saved_best_loss
+                print(f"Checkpoint loaded (epoch {start_epoch}, best_loss={best_loss:.4f}), continuing training")
+
+        for epoch in range(start_epoch, num_epochs):
             # 训练
             train_loss = self.train_epoch(dataloader, epoch + 1)
             self.scheduler.step()
 
-            # 评估
-            if eval_dataloader is not None and (epoch + 1) % eval_every == 0:
+            # 评估（每次 epoch 都评估，以便及时捕捉突破）
+            if eval_dataloader is not None:
                 eval_loss = self.evaluate(eval_dataloader)
-                print(f"Epoch {epoch+1}: train_loss={train_loss:.4f}, eval_loss={eval_loss:.4f}")
 
+                # 检查是否突破
                 if eval_loss < best_loss:
                     best_loss = eval_loss
-                    self.save_checkpoint('best_model.pt')
+                    self.save_checkpoint('best_model.pt', epoch=epoch + 1, best_loss=best_loss)
+                    print(f"Epoch {epoch+1}: train_loss={train_loss:.4f}, eval_loss={eval_loss:.4f} -> New best, saved!")
+                elif (epoch + 1) % eval_every == 0:
+                    print(f"Epoch {epoch+1}: train_loss={train_loss:.4f}, eval_loss={eval_loss:.4f}")
             else:
-                print(f"Epoch {epoch+1}: train_loss={train_loss:.4f}")
+                if (epoch + 1) % eval_every == 0:
+                    print(f"Epoch {epoch+1}: train_loss={train_loss:.4f}")
 
         return best_loss
 
@@ -174,12 +197,14 @@ class Trainer:
 
         return total_loss / num_batches
 
-    def save_checkpoint(self, path):
+    def save_checkpoint(self, path, epoch=None, best_loss=None):
         """保存模型"""
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict(),
+            'epoch': epoch,
+            'best_loss': best_loss,
         }, path)
 
     def load_checkpoint(self, path):
@@ -188,6 +213,7 @@ class Trainer:
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        return checkpoint.get('epoch', None), checkpoint.get('best_loss', None)
 
 
 def train_model(
