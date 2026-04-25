@@ -212,7 +212,9 @@ class Trainer:
         checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        # 兼容旧版 checkpoint（可能没有 scheduler_state_dict）
+        if 'scheduler_state_dict' in checkpoint:
+            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         return checkpoint.get('epoch', None), checkpoint.get('best_loss', None)
 
 
